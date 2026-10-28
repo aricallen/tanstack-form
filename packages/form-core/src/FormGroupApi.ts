@@ -6,6 +6,7 @@ import {
   getAsyncValidatorArray,
   getSyncValidatorArray,
   isFieldInGroup,
+  isSameValidationError,
   mergeOpts,
 } from './utils'
 import { defaultValidationLogic } from './ValidationLogic'
@@ -1744,7 +1745,7 @@ export class FormGroupApi<
       if (newErrorValue) hasErrored = true
 
       if (
-        previousErrorValue === newErrorValue &&
+        isSameValidationError(previousErrorValue, newErrorValue) &&
         fieldMeta?.errorSourceMap[errorMapKey as never] === newSource
       ) {
         continue
@@ -1861,8 +1862,13 @@ export class FormGroupApi<
             fieldLevelError,
           })
 
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (fieldOrGroup.state.meta.errorMap?.[errorMapKey] !== newErrorValue) {
+        if (
+          !isSameValidationError(
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+            fieldOrGroup.state.meta.errorMap?.[errorMapKey],
+            newErrorValue,
+          )
+        ) {
           fieldOrGroup.setMeta((prev) => ({
             ...prev,
             errorMap: {

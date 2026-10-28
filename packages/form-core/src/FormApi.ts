@@ -10,6 +10,7 @@ import {
   isFieldInGroup,
   isGlobalFormValidationError,
   isNonEmptyArray,
+  isSameValidationError,
   mergeOpts,
   setBy,
   throttleFormState,
@@ -2065,9 +2066,14 @@ export class FormApi<
             }
           }
 
-          // This conditional check is required, otherwise we get runtime errors.
-          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-          if (currentErrorMap?.[errorMapKey] !== newErrorValue) {
+          if (
+            !isSameValidationError(
+              // This conditional check is required, otherwise we get runtime errors.
+              // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+              currentErrorMap?.[errorMapKey],
+              newErrorValue,
+            )
+          ) {
             this.setFieldMeta(field, (prev = defaultFieldMeta) => ({
               ...prev,
               errorMap: {
@@ -2083,8 +2089,13 @@ export class FormApi<
         }
 
         if (!validateOpts?.dontUpdateFormErrorMap) {
-          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-          if (this.state.errorMap?.[errorMapKey] !== formError) {
+          if (
+            !isSameValidationError(
+              // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+              this.state.errorMap?.[errorMapKey],
+              formError,
+            )
+          ) {
             this.baseStore.setState((prev) => ({
               ...prev,
               errorMap: {
@@ -2282,8 +2293,13 @@ export class FormApi<
                 previousErrorValue: currentErrorMap?.[errorMapKey],
               })
 
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-            if (currentErrorMap?.[errorMapKey] !== newErrorValue) {
+            if (
+              !isSameValidationError(
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+                currentErrorMap?.[errorMapKey],
+                newErrorValue,
+              )
+            ) {
               this.setFieldMeta(field, (prev = defaultFieldMeta) => ({
                 ...prev,
                 errorMap: {
@@ -2298,7 +2314,14 @@ export class FormApi<
             }
           }
 
-          if (!validateOpts?.dontUpdateFormErrorMap) {
+          if (
+            !validateOpts?.dontUpdateFormErrorMap &&
+            !isSameValidationError(
+              // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+              this.state.errorMap?.[errorMapKey],
+              formError,
+            )
+          ) {
             this.baseStore.setState((prev) => ({
               ...prev,
               errorMap: {

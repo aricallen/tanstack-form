@@ -549,6 +549,51 @@ export function evaluate<T>(objA: T, objB: T) {
   return true
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
+/**
+ * Checks whether two validation errors have the same content.
+ *
+ * Validators such as Standard Schemas return new error objects on every run, even when nothing
+ * changed. Comparing them by content lets us skip meta updates that would only re-render fields.
+ * Only arrays and plain objects are compared structurally; anything else (e.g. class instances
+ * holding validator internals) has to be the same reference.
+ * @private
+ */
+export function isSameValidationError(
+  errorA: unknown,
+  errorB: unknown,
+  comparing = new Map<object, object>(),
+): boolean {
+  if (Object.is(errorA, errorB)) return true
+
+  const isArrayA = Array.isArray(errorA)
+  if (isArrayA !== Array.isArray(errorB)) return false
+  if (!isArrayA && !(isPlainObject(errorA) && isPlainObject(errorB))) {
+    return false
+  }
+
+  const objA = errorA as Record<string, unknown>
+  const objB = errorB as Record<string, unknown>
+
+  // Already comparing this pair further up, so a cycle can't make them unequal
+  if (comparing.get(objA) === objB) return true
+  comparing.set(objA, objB)
+
+  const keysA = Object.keys(objA)
+  if (keysA.length !== Object.keys(objB).length) return false
+
+  return keysA.every(
+    (key) =>
+      Object.prototype.hasOwnProperty.call(objB, key) &&
+      isSameValidationError(objA[key], objB[key], comparing),
+  )
+}
+
 /**
  * Determines the logic for determining the error source and value to set on the field meta within the form level sync/async validation.
  * @private

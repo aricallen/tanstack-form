@@ -7,6 +7,7 @@ import {
   determineFormLevelErrorSourceAndValue,
   evaluate,
   getBy,
+  isSameValidationError,
   makePathArray,
   mergeOpts,
   setBy,
@@ -841,6 +842,55 @@ describe('evaluate', () => {
     class Empty {}
     expect(evaluate(new Empty(), {})).toEqual(false)
     expect(evaluate({}, new Empty())).toEqual(false)
+  })
+})
+
+describe('isSameValidationError', () => {
+  it('should compare primitives', () => {
+    expect(isSameValidationError('Required', 'Required')).toBe(true)
+    expect(isSameValidationError('Required', 'Too short')).toBe(false)
+    expect(isSameValidationError(undefined, undefined)).toBe(true)
+    expect(isSameValidationError(undefined, 'Required')).toBe(false)
+  })
+
+  it('should compare arrays and plain objects by content', () => {
+    const issue = () => ({ message: 'Too short', path: ['name'] })
+
+    expect(isSameValidationError([issue()], [issue()])).toBe(true)
+    expect(
+      isSameValidationError({ name: [issue()] }, { name: [issue()] }),
+    ).toBe(true)
+    expect(
+      isSameValidationError([issue()], [{ ...issue(), message: 'Required' }]),
+    ).toBe(false)
+    expect(isSameValidationError([issue()], [issue(), issue()])).toBe(false)
+    expect(isSameValidationError({ a: 1 }, { b: 1 })).toBe(false)
+    expect(isSameValidationError([], {})).toBe(false)
+  })
+
+  it('should compare class instances by reference', () => {
+    class ValidationIssue {
+      constructor(public message: string) {}
+    }
+    const issue = new ValidationIssue('Required')
+
+    expect(isSameValidationError(issue, issue)).toBe(true)
+    expect(
+      isSameValidationError(
+        new ValidationIssue('Required'),
+        new ValidationIssue('Required'),
+      ),
+    ).toBe(false)
+  })
+
+  it('should handle circular references', () => {
+    const createCircular = () => {
+      const error: Record<string, unknown> = { message: 'Required' }
+      error.self = error
+      return error
+    }
+
+    expect(isSameValidationError(createCircular(), createCircular())).toBe(true)
   })
 })
 

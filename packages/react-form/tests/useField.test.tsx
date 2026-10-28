@@ -6,7 +6,7 @@ import { StrictMode, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { useForm } from '../src/index'
 import { sleep } from './utils'
-import type { AnyFieldApi } from '../src/index'
+import type { AnyFieldApi, StandardSchemaV1 } from '../src/index'
 
 const user = userEvent.setup()
 
@@ -1713,5 +1713,74 @@ describe('useField', () => {
 
     expect(queryByText('a')).toBeInTheDocument()
     expect(queryByText('never')).not.toBeInTheDocument()
+  })
+
+  it('should not rerender a field whose form-level schema errors did not change', async () => {
+    type Person = { firstName: string; lastName: string }
+
+    // Like real schema libraries, this returns new issue objects on every run.
+    const schema: StandardSchemaV1<Person> = {
+      '~standard': {
+        version: 1,
+        vendor: 'test',
+        validate: (value) => {
+          const person = value as Person
+          const issues = [
+            ...(person.firstName.length < 3
+              ? [{ message: 'First name is too short', path: ['firstName'] }]
+              : []),
+            ...(person.lastName.length < 3
+              ? [{ message: 'Last name is too short', path: ['lastName'] }]
+              : []),
+          ]
+          return issues.length ? { issues } : { value: person }
+        },
+      },
+    }
+
+    const renderLastName = vi.fn()
+
+    function Comp() {
+      const form = useForm({
+        defaultValues: { firstName: '', lastName: '' } as Person,
+        validators: { onChange: schema },
+      })
+
+      return (
+        <>
+          <form.Field name="firstName">
+            {(field) => (
+              <input
+                data-testid="firstName"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+              />
+            )}
+          </form.Field>
+          <form.Field name="lastName">
+            {(field) => {
+              renderLastName()
+              return (
+                <p>
+                  {field.state.meta.errors.map((err) => err?.message).join()}
+                </p>
+              )
+            }}
+          </form.Field>
+        </>
+      )
+    }
+
+    const { getByTestId, getByText } = render(<Comp />)
+    const input = getByTestId('firstName')
+
+    await user.type(input, 'a')
+    expect(getByText('Last name is too short')).toBeInTheDocument()
+    renderLastName.mockClear()
+
+    await user.type(input, 'bcd')
+
+    expect(renderLastName).not.toHaveBeenCalled()
+    expect(getByText('Last name is too short')).toBeInTheDocument()
   })
 })
