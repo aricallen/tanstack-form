@@ -1329,4 +1329,42 @@ describe('form group api', () => {
       expect(step1Group.state.meta.isValid).toBe(true)
     })
   })
+
+  it('should not update an untouched child field whose group schema errors did not change', () => {
+    const form = new FormApi({
+      defaultValues: { step1: { firstName: '', lastName: '' } },
+    })
+    const step1Group = new FormGroupApi({
+      name: 'step1',
+      form,
+      validators: {
+        onChange: z.object({
+          firstName: z.string().min(3, 'First name is too short'),
+          lastName: z.string().min(3, 'Last name is too short'),
+        }),
+      },
+    })
+    const firstNameField = new FieldApi({ form, name: 'step1.firstName' })
+    const lastNameField = new FieldApi({ form, name: 'step1.lastName' })
+    form.mount()
+    step1Group.mount()
+    firstNameField.mount()
+    lastNameField.mount()
+
+    firstNameField.handleChange('a')
+    expect(lastNameField.state.meta.errors).toMatchObject([
+      { message: 'Last name is too short' },
+    ])
+
+    const errorMap = lastNameField.state.meta.errorMap
+    const listener = vi.fn()
+    const { unsubscribe } = lastNameField.store.subscribe(listener)
+
+    firstNameField.handleChange('ab')
+    firstNameField.handleChange('abc')
+
+    unsubscribe()
+    expect(listener).not.toHaveBeenCalled()
+    expect(lastNameField.state.meta.errorMap).toBe(errorMap)
+  })
 })

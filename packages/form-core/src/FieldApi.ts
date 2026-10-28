@@ -10,6 +10,7 @@ import {
   getAsyncValidatorArray,
   getSyncValidatorArray,
   isFieldInGroup,
+  isSameValidationError,
   mergeOpts,
 } from './utils'
 import { defaultValidationLogic } from './ValidationLogic'
@@ -1317,8 +1318,13 @@ export class FieldApi<
             fieldLevelError,
           })
 
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (field.state.meta.errorMap?.[errorMapKey] !== newErrorValue) {
+        if (
+          !isSameValidationError(
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+            field.state.meta.errorMap?.[errorMapKey],
+            newErrorValue,
+          )
+        ) {
           field.setMeta((prev) => ({
             ...prev,
             errorMap: {
@@ -1555,20 +1561,30 @@ export class FieldApi<
             return resolve(undefined)
           }
 
-          field.setMeta((prev) => {
-            return {
-              ...prev,
-              errorMap: {
-                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                ...prev?.errorMap,
-                [errorMapKey]: newErrorValue,
-              },
-              errorSourceMap: {
-                ...prev.errorSourceMap,
-                [errorMapKey]: newSource,
-              },
-            }
-          })
+          if (
+            !isSameValidationError(
+              // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+              field.state.meta.errorMap?.[errorMapKey],
+              newErrorValue,
+            ) ||
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+            field.state.meta.errorSourceMap?.[errorMapKey] !== newSource
+          ) {
+            field.setMeta((prev) => {
+              return {
+                ...prev,
+                errorMap: {
+                  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+                  ...prev?.errorMap,
+                  [errorMapKey]: newErrorValue,
+                },
+                errorSourceMap: {
+                  ...prev.errorSourceMap,
+                  [errorMapKey]: newSource,
+                },
+              }
+            })
+          }
 
           resolve(newErrorValue)
         }),

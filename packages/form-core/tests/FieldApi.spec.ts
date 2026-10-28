@@ -3552,6 +3552,73 @@ describe('field api', () => {
       vi.useRealTimers()
     })
   })
+
+  it('should not update a linked field whose schema errors did not change', () => {
+    const form = new FormApi({
+      defaultValues: { password: '', confirmPassword: '' },
+    })
+    form.mount()
+    const passwordField = new FieldApi({ form, name: 'password' })
+    const confirmPasswordField = new FieldApi({
+      form,
+      name: 'confirmPassword',
+      validators: {
+        onChangeListenTo: ['password'],
+        onChange: z.string().min(3, 'Confirmation is too short'),
+      },
+    })
+    passwordField.mount()
+    confirmPasswordField.mount()
+
+    passwordField.handleChange('a')
+    expect(confirmPasswordField.state.meta.errors).toMatchObject([
+      { message: 'Confirmation is too short' },
+    ])
+
+    const errorMap = confirmPasswordField.state.meta.errorMap
+    const listener = vi.fn()
+    const { unsubscribe } = confirmPasswordField.store.subscribe(listener)
+
+    passwordField.handleChange('ab')
+    passwordField.handleChange('abc')
+
+    unsubscribe()
+    expect(listener).not.toHaveBeenCalled()
+    expect(confirmPasswordField.state.meta.errorMap).toBe(errorMap)
+  })
+
+  it('should not update a field whose async schema errors did not change', async () => {
+    vi.useFakeTimers()
+    const form = new FormApi({
+      defaultValues: { password: '', confirmPassword: '' },
+    })
+    form.mount()
+    const passwordField = new FieldApi({ form, name: 'password' })
+    const confirmPasswordField = new FieldApi({
+      form,
+      name: 'confirmPassword',
+      validators: {
+        onChangeListenTo: ['password'],
+        onChangeAsync: z.string().min(3, 'Confirmation is too short'),
+        onChangeAsyncDebounceMs: 0,
+      },
+    })
+    passwordField.mount()
+    confirmPasswordField.mount()
+
+    passwordField.handleChange('a')
+    await vi.runAllTimersAsync()
+    expect(confirmPasswordField.state.meta.errors).toMatchObject([
+      { message: 'Confirmation is too short' },
+    ])
+
+    const errorMap = confirmPasswordField.state.meta.errorMap
+    passwordField.handleChange('ab')
+    await vi.runAllTimersAsync()
+
+    expect(confirmPasswordField.state.meta.errorMap).toBe(errorMap)
+    vi.useRealTimers()
+  })
 })
 
 describe('edge cases and error handling', () => {

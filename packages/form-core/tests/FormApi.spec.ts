@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { type } from 'arktype'
 import { FieldApi, FormApi, formEventClient, mergeForm } from '../src/index'
 import { sleep } from './utils'
 import type {
@@ -4330,6 +4331,178 @@ it('should generate a formId if not provided', () => {
   form.mount()
 
   expect(form.formId.length).toBeGreaterThan(1)
+})
+
+describe('form api unchanged validator errors', () => {
+  const schema = z.object({
+    firstName: z.string().min(3, 'First name is too short'),
+    lastName: z.string().min(3, 'Last name is too short'),
+  })
+
+  function expectUntouchedFieldNotUpdated(form: AnyFormApi) {
+    form.mount()
+    const firstNameField = new FieldApi({ form, name: 'firstName' })
+    const lastNameField = new FieldApi({ form, name: 'lastName' })
+    firstNameField.mount()
+    lastNameField.mount()
+
+    firstNameField.handleChange('a')
+    expect(lastNameField.state.meta.errors).toMatchObject([
+      { message: 'Last name is too short' },
+    ])
+
+    const errorMap = lastNameField.state.meta.errorMap
+    const listener = vi.fn()
+    const { unsubscribe } = lastNameField.store.subscribe(listener)
+
+    firstNameField.handleChange('ab')
+    firstNameField.handleChange('abc')
+
+    unsubscribe()
+    expect(listener).not.toHaveBeenCalled()
+    expect(lastNameField.state.meta.errorMap).toBe(errorMap)
+  }
+
+  it('should not update an untouched field when a standard schema returns unchanged errors', () => {
+    expectUntouchedFieldNotUpdated(
+      new FormApi({
+        defaultValues: { firstName: '', lastName: '' },
+        validators: { onChange: schema },
+      }),
+    )
+  })
+
+  it('should not update an untouched field when a validator returns unchanged error objects', () => {
+    expectUntouchedFieldNotUpdated(
+      new FormApi({
+        defaultValues: { firstName: '', lastName: '' },
+        validators: {
+          onChange: ({
+            value,
+          }: {
+            value: { firstName: string; lastName: string }
+          }) => ({
+            fields: {
+              ...(value.firstName.length < 3 && {
+                firstName: { message: 'First name is too short' },
+              }),
+              ...(value.lastName.length < 3 && {
+                lastName: { message: 'Last name is too short' },
+              }),
+            },
+          }),
+        },
+      }),
+    )
+  })
+
+  it('should keep the form errorMap when the form schema error did not change', () => {
+    const form = new FormApi({
+      defaultValues: { firstName: '', lastName: '' },
+      validators: { onChange: schema },
+    })
+    form.mount()
+    const firstNameField = new FieldApi({ form, name: 'firstName' })
+    const lastNameField = new FieldApi({ form, name: 'lastName' })
+    firstNameField.mount()
+    lastNameField.mount()
+
+    lastNameField.handleChange('a')
+    const errorMap = form.state.errorMap
+    expect(errorMap.onChange).toBeDefined()
+
+    lastNameField.handleChange('ab')
+
+    expect(form.state.errorMap.onChange).toBe(errorMap.onChange)
+  })
+
+  it('should update a field when its schema error changes or is cleared', () => {
+    const form = new FormApi({
+      defaultValues: { name: '', age: 0 },
+      validators: {
+        onChange: z.object({
+          name: z.string().min(3, 'Name is too short'),
+          age: z
+            .number()
+            .min(18, 'Must be an adult')
+            .max(150, 'Must be a realistic age'),
+        }),
+      },
+    })
+    form.mount()
+    const nameField = new FieldApi({ form, name: 'name' })
+    const ageField = new FieldApi({ form, name: 'age' })
+    nameField.mount()
+    ageField.mount()
+
+    nameField.handleChange('a')
+    expect(ageField.state.meta.errors).toMatchObject([
+      { message: 'Must be an adult' },
+    ])
+
+    ageField.handleChange(200)
+    expect(ageField.state.meta.errors).toMatchObject([
+      { message: 'Must be a realistic age' },
+    ])
+
+    ageField.handleChange(30)
+    expect(ageField.state.meta.errors).toStrictEqual([])
+    expect(ageField.state.meta.errorMap.onChange).toBeUndefined()
+  })
+
+  it('should not update an untouched field whose async schema errors did not change', async () => {
+    vi.useFakeTimers()
+    const form = new FormApi({
+      defaultValues: { firstName: '', lastName: '' },
+      validators: {
+        onChangeAsync: schema,
+        onChangeAsyncDebounceMs: 0,
+      },
+    })
+    form.mount()
+    const firstNameField = new FieldApi({ form, name: 'firstName' })
+    const lastNameField = new FieldApi({ form, name: 'lastName' })
+    firstNameField.mount()
+    lastNameField.mount()
+
+    firstNameField.handleChange('a')
+    await vi.runAllTimersAsync()
+    expect(lastNameField.state.meta.errors).toMatchObject([
+      { message: 'Last name is too short' },
+    ])
+
+    const fieldErrorMap = lastNameField.state.meta.errorMap
+    const formErrorMap = form.state.errorMap
+    const listener = vi.fn()
+    const { unsubscribe } = lastNameField.store.subscribe(listener)
+
+    firstNameField.handleChange('ab')
+    await vi.runAllTimersAsync()
+
+    unsubscribe()
+    expect(listener).not.toHaveBeenCalled()
+    expect(lastNameField.state.meta.errorMap).toBe(fieldErrorMap)
+    expect(form.state.errorMap.onChange).toBe(formErrorMap.onChange)
+    vi.useRealTimers()
+  })
+
+  it('should revalidate unchanged values with class instance errors', () => {
+    // ArkType issues are class instances that reference the validator's
+    // internal (cyclic) state, so they must not be compared structurally.
+    const form = new FormApi({
+      defaultValues: { name: '' },
+      validators: { onBlur: type({ name: 'string >= 3' }) },
+    })
+    form.mount()
+    const field = new FieldApi({ form, name: 'name' })
+    field.mount()
+
+    field.handleBlur()
+    expect(field.state.meta.errors).toHaveLength(1)
+
+    expect(() => field.handleBlur()).not.toThrow()
+    expect(field.state.meta.errors).toHaveLength(1)
+  })
 })
 
 describe('form api event client', () => {
