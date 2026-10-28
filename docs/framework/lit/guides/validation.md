@@ -240,9 +240,11 @@ private form = new TanStackFormController(this, {
 
 ## Prevent invalid submission
 
-`form.api.handleSubmit()` skips `onSubmit` when validation fails and resolves
-with the validation errors. `onSubmitInvalid` is currently available on form
-groups; root-form support is planned but not yet implemented. Subscribe to
+`form.api.handleSubmit()` skips `onSubmit` when validation fails and resolves with
+`{ errors, cause }`, where `cause` names the phase that failed. If a validator
+or `onSubmit` throws, the promise rejects instead, so handle the rejection when
+you don't `await` it. `onSubmitInvalid` runs in both cases.
+Subscribe to
 `canSubmit` and `isSubmitting` to reflect that state in the submit UI:
 
 ```ts

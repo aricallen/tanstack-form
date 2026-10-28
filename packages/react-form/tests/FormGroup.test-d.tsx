@@ -182,7 +182,7 @@ function FormGroupSubmitTypes() {
       }}
       onSubmitInvalid={(context) => {
         expectTypeOf<keyof typeof context>().toEqualTypeOf<
-          'value' | 'formApi' | 'groupApi'
+          'value' | 'formApi' | 'groupApi' | 'cause'
         >()
         expectTypeOf(context.value).toEqualTypeOf<GuestDetails>()
         expectTypeOf<

@@ -19,18 +19,22 @@ describe('runSubmissionProcess', () => {
 
     const result = await form.handleSubmit()
 
-    expect(result).toEqual([
-      {
-        form: [{ message: 'Submission failed' }],
-        fields: { name: [{ message: 'Name is required' }] },
-      },
-    ])
+    expect(result).toEqual({
+      errors: [
+        {
+          form: [{ message: 'Submission failed' }],
+          fields: { name: [{ message: 'Name is required' }] },
+        },
+      ],
+      cause: 'on_submit',
+    })
     expect(form.state.errors).toEqual([{ message: 'Submission failed' }])
     expect(field.errors).toEqual([{ message: 'Name is required' }])
     expect(form.state.isSubmitSuccessful).toBe(false)
     expect(onSubmitInvalid).toHaveBeenCalledWith({
       value: { name: '' },
       formApi: form,
+      cause: 'on_submit',
     })
   })
 
@@ -60,7 +64,7 @@ describe('runSubmissionProcess', () => {
 
     const result = await form.handleSubmit()
 
-    expect(result).toEqual([])
+    expect(result).toEqual({ errors: [], cause: null })
     expect(field.errors).toEqual([])
     expect(form.state).toMatchObject({
       errors: [],

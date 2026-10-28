@@ -895,7 +895,7 @@ describe('InternalFormApi - reset', () => {
 
     finishRequest()
 
-    await expect(submission).resolves.toEqual([])
+    await expect(submission).resolves.toEqual({ errors: [], cause: null })
     expect(form.state).toMatchObject({
       values: { name: 'reset value' },
       errors: [],
@@ -1250,7 +1250,7 @@ describe('InternalFormApi - handleSubmit', () => {
         value: { name: '' },
       }),
     )
-    await expect(submission).resolves.toEqual([])
+    await expect(submission).resolves.toEqual({ errors: [], cause: null })
   })
 })
 

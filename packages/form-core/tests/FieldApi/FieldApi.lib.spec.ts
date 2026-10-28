@@ -544,7 +544,10 @@ describe('InternalFieldApi - _update', () => {
         'length of the validator array should not change',
       ),
     )
-    await expect(form.handleSubmit()).resolves.toEqual([])
+    await expect(form.handleSubmit()).resolves.toEqual({
+      errors: [],
+      cause: null,
+    })
     expect(field.errors).toEqual([])
     expect(form.state.canSubmit).toBe(true)
   })
@@ -1035,7 +1038,7 @@ describe('InternalFieldApi - reset', () => {
     field.reset()
 
     expect(onAbort).toHaveBeenCalledOnce()
-    await expect(submission).resolves.toEqual([])
+    await expect(submission).resolves.toEqual({ errors: [], cause: null })
     request.resolve('Late error')
     await request.promise
 
@@ -1235,13 +1238,16 @@ describe('InternalFieldApi - _kill', () => {
     form.deleteField('name')
 
     expect(onAbort).toHaveBeenCalledOnce()
-    await expect(submission).resolves.toEqual([])
+    await expect(submission).resolves.toEqual({ errors: [], cause: null })
     request.resolve('Late error')
     await request.promise
     validator.mockClear()
 
     field.handleChange('ignored')
-    await expect(form.handleSubmit()).resolves.toEqual([])
+    await expect(form.handleSubmit()).resolves.toEqual({
+      errors: [],
+      cause: null,
+    })
 
     expect(validator).not.toHaveBeenCalled()
     expect(form.getFieldValue('name')).toBe('')

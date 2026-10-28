@@ -467,12 +467,18 @@ const form = useForm({
 })
 ```
 
-`form.handleSubmit()` resolves to the validation-result array for that
-submission attempt, so framework examples can await it and continue to native
-or server submission when `errors.length === 0`. A thrown or rejected
-`onSubmit` marks submission unsuccessful but is not added to that array. Return
-`createValidationError(...)` or `parseIssues(...)` when a submit failure should
-become validation state.
+`form.handleSubmit()` resolves to `{ errors, cause }` for that submission
+attempt, so framework examples can await it and continue to native or server
+submission when `errors.length === 0`. `cause` is `'field_validation'`,
+`'form_validation'`, or `'on_submit'`, or `null` when the submission succeeds.
+Return `createValidationError(...)` or `parseIssues(...)` when a submit failure
+should become validation state.
+
+If a validator or `onSubmit` throws, `onSubmitInvalid` receives the failing
+phase as `cause`, and `form.handleSubmit()` then rejects with the thrown error.
+Exceptions thrown by `onSubmitInvalid` are not caught, so they also reject. Add
+a `.catch()` or `try`/`catch` where you call `handleSubmit()`, otherwise these
+exceptions become unhandled rejections.
 
 ## Selectors and atoms
 
@@ -671,8 +677,8 @@ submission. Express when a field validates through its validators instead:
   covers most v1 `validateField` calls made from another field's `onChange`.
 - Call `form.handleSubmit()` to validate every field and the form together.
   Unlike `validateAllFields`, it also calls `onSubmit` when validation passes.
-  It resolves to the error results, so an empty array means everything is
-  valid.
+  It resolves to `{ errors, cause }`, so an empty `errors` array means
+  everything is valid.
 
 `form.validate('change')` and `form.validate('blur')` still exist, but they run
 form-level validators only. Field validators do not run.
@@ -853,8 +859,11 @@ Group submission is its own validation cycle. `group.handleSubmit()` validates
 the group and its fields and then calls the group's `onSubmit` or
 `onSubmitInvalid`; `form.handleSubmit()` does not also run the group's
 validators. Keep any rules required for final whole-form submission in the
-form-level validator pipeline as well. `group.handleSubmit()` resolves to an
-error array, and `group.state.errors` is an array.
+form-level validator pipeline as well. `group.handleSubmit()` resolves to
+`{ errors, cause }`, where `cause` is `'field_validation'`,
+`'group_validation'`, or `'on_submit'`, or `null` on success. It rejects when a
+validator, `onSubmit`, or `onSubmitInvalid` throws, like `form.handleSubmit()`.
+`group.state.errors` is an array.
 
 For a field inside a mounted group, scalar state exposed to `errorVisibility`
 (such as `submissionAttempts` and `isDirty`) is scoped to the nearest group.

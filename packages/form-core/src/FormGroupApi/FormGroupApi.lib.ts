@@ -39,6 +39,8 @@ import type {
   FormGroupApi,
   FormGroupOptions,
   FormGroupState,
+  FormGroupSubmitCause,
+  FormGroupSubmitResult,
 } from './FormGroupApi.public'
 import type {
   ConfigurableValidationTrigger,
@@ -58,7 +60,8 @@ import type {
 
 interface FormGroupValidationOutcome<TGroupValue> {
   errors: Array<FormGroupValidateResult<TGroupValue>>
-  hasException: boolean
+  cause: FormGroupSubmitCause | null
+  exception: { cause: FormGroupSubmitCause; error: unknown } | null
 }
 
 export type AnyInternalFormGroupApi = InternalFormGroupApi<
@@ -498,13 +501,19 @@ export class InternalFormGroupApi<
 
     const results = await Promise.all(fieldValidationPromises)
 
+    const errors = results.flatMap((result) =>
+      result.results
+        .map(({ result: fieldResult }) => fieldResult)
+        .filter(isErrorResult),
+    )
+    const thrown = results.find((result) => result.thrownError !== null)
+
     return {
-      errors: results.flatMap((result) =>
-        result.results
-          .map(({ result: fieldResult }) => fieldResult)
-          .filter(isErrorResult),
-      ),
-      hasException: results.some((result) => result.thrownError !== null),
+      errors,
+      cause: errors.length > 0 ? 'field_validation' : null,
+      exception: thrown
+        ? { cause: 'field_validation', error: thrown.thrownError }
+        : null,
     }
   }
 
@@ -710,7 +719,14 @@ export class InternalFormGroupApi<
 
       return {
         errors,
-        hasException: results.thrownError !== null || fieldOutcome.hasException,
+        cause:
+          fieldOutcome.cause ??
+          (groupErrors.length > 0 ? 'group_validation' : null),
+        exception:
+          fieldOutcome.exception ??
+          (results.thrownError !== null
+            ? { cause: 'group_validation', error: results.thrownError }
+            : null),
       }
     } finally {
       finishValidation()
@@ -724,29 +740,34 @@ export class InternalFormGroupApi<
     return (await this._validate(signal, opts)).errors
   }
 
-  handleSubmit = async (): Promise<
-    Array<FormGroupValidateResult<TGroupValue>>
-  > => {
+  handleSubmit = async (): Promise<FormGroupSubmitResult<TGroupValue>> => {
     this._submissionAttempts.set((attempts) => attempts + 1)
     this._isSubmitting.set(true)
     this._isSubmitSuccessful.set(false)
 
     try {
-      const validationOutcome = await this._validate('submit')
+      const { errors, cause, exception } = await this._validate('submit')
       const value = this.value
-      const invalidContext = {
-        value,
-        formApi: this.form,
-        groupApi: this,
-      } as never
+      const createInvalidContext = (invalidCause: FormGroupSubmitCause) =>
+        ({
+          value,
+          formApi: this.form,
+          groupApi: this,
+          cause: invalidCause,
+        }) as never
 
-      if (
-        validationOutcome.errors.length > 0 ||
-        validationOutcome.hasException ||
-        this.state.isInvalid
-      ) {
-        await this._options.onSubmitInvalid?.(invalidContext)
-        return validationOutcome.errors
+      if (errors.length > 0 || exception || this.state.isInvalid) {
+        const invalidCause = exception?.cause ?? cause ?? 'group_validation'
+
+        await this._options.onSubmitInvalid?.(
+          createInvalidContext(invalidCause),
+        )
+
+        if (exception) {
+          throw exception.error
+        }
+
+        return { errors, cause: invalidCause }
       }
 
       const submitContext = {
@@ -762,12 +783,12 @@ export class InternalFormGroupApi<
       try {
         await this._options.onSubmit?.(submitContext)
       } catch (error) {
-        await this._options.onSubmitInvalid?.(invalidContext)
+        await this._options.onSubmitInvalid?.(createInvalidContext('on_submit'))
         throw error
       }
 
       this._isSubmitSuccessful.set(true)
-      return []
+      return { errors: [], cause: null }
     } finally {
       this._isSubmitting.set(false)
     }
