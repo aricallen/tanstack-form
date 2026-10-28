@@ -17,10 +17,14 @@ import type {
   FormApi,
   FormErrorTypes,
   FormErrors,
+  FormGroupSubmitCause,
+  FormGroupSubmitResult,
   FormGroupValidators,
   FormOptions,
   FormState,
+  FormSubmitCause,
   FormSubmitInvalidContext,
+  FormSubmitResult,
   FormValidators,
   OnSubmitError,
   ParseSubmitIssuesFn,
@@ -765,10 +769,10 @@ describe('ValidationTriggerOption', () => {
 })
 
 describe('FormErrors', () => {
-  it('exposes only value and formApi in the invalid submit context', () => {
+  it('exposes only value, formApi, and cause in the invalid submit context', () => {
     expectTypeOf<
       keyof FormSubmitInvalidContext<TestFormData, FormErrorTypes>
-    >().toEqualTypeOf<'value' | 'formApi'>()
+    >().toEqualTypeOf<'value' | 'formApi' | 'cause'>()
 
     const form = new InternalFormApi({
       defaultValues: { name: '' },
@@ -777,13 +781,25 @@ describe('FormErrors', () => {
         expectTypeOf(context.formApi.state.values).toEqualTypeOf<{
           name: string
         }>()
+        expectTypeOf(context.cause).toEqualTypeOf<FormSubmitCause>()
         expectTypeOf<keyof typeof context>().toEqualTypeOf<
-          'value' | 'formApi'
+          'value' | 'formApi' | 'cause'
         >()
       },
     })
 
-    void form
+    expectTypeOf(form.handleSubmit).returns.resolves.toEqualTypeOf<
+      FormSubmitResult<{ name: string }>
+    >()
+  })
+
+  it('types the group submit result and invalid submit cause', () => {
+    expectTypeOf<FormGroupSubmitCause>().toEqualTypeOf<
+      'field_validation' | 'group_validation' | 'on_submit'
+    >()
+    expectTypeOf<
+      FormGroupSubmitResult<{ name: string }>['cause']
+    >().toEqualTypeOf<FormGroupSubmitCause | null>()
   })
 
   it('should fall back omitted submit errors to ValidationIssue submit meta', () => {

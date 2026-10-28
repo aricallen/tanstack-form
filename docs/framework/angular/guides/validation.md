@@ -297,8 +297,10 @@ form = injectForm({
 ## Prevent invalid submission
 
 `form.handleSubmit()` skips `onSubmit` when validation fails and resolves with
-the validation errors. `onSubmitInvalid` is currently available on form
-groups; root-form support is planned but not yet implemented. Select
+`{ errors, cause }`, where `cause` names the phase that failed. If a validator
+or `onSubmit` throws, the promise rejects instead, so handle the rejection when
+you don't `await` it. `onSubmitInvalid` runs in both cases.
+Select
 `canSubmit` and `isSubmitting` as Angular signals to reflect that state in the
 submit UI:
 

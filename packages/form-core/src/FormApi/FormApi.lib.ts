@@ -53,6 +53,7 @@ import type {
   FormOptions,
   FormResetOptions,
   FormState,
+  FormSubmitResult,
 } from './FormApi.public'
 import type { FormErrorMeta } from './formState.lib'
 import type { DeepKeys } from '../deep-keys.public'
@@ -1125,7 +1126,7 @@ export class InternalFormApi<
 
   _handleSubmitPromise: Promise<any> | null = null
 
-  handleSubmit = (): Promise<Array<FormValidationError<TFormData>>> => {
+  handleSubmit = (): Promise<FormSubmitResult<TFormData>> => {
     if (this._handleSubmitPromise) return this._handleSubmitPromise
 
     this._notifyFormListener('submit', null)

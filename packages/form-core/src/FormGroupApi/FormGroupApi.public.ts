@@ -63,6 +63,28 @@ export interface FormGroupSubmitContext<
 }
 
 /**
+ * The submission phase that caused a form group submission to fail.
+ *
+ * - `field_validation`: a field validator in the group reported an error or
+ *   threw.
+ * - `group_validation`: a group validator reported an error or threw, or the
+ *   group was already invalid.
+ * - `on_submit`: the group's `onSubmit` threw.
+ */
+export type FormGroupSubmitCause =
+  'field_validation' | 'group_validation' | 'on_submit'
+
+/**
+ * The result of a form group submission that did not throw.
+ */
+export interface FormGroupSubmitResult<in out TGroupValue> {
+  /** The error results from validation. Empty when the submission succeeds. */
+  errors: Array<FormGroupValidateResult<TGroupValue>>
+  /** The earliest phase that reported errors, or `null` on success. */
+  cause: FormGroupSubmitCause | null
+}
+
+/**
  * Context passed to a form group's `onSubmitInvalid` when submission fails.
  *
  * @example
@@ -96,6 +118,11 @@ export interface FormGroupSubmitInvalidContext<
     TGroupErrorTypes,
     TFormErrorTypes
   >
+  /**
+   * The phase that failed. If a phase threw, this is the phase that threw.
+   * Otherwise, it is the earliest phase that reported errors.
+   */
+  cause: FormGroupSubmitCause
 }
 
 export type FormGroupSubmitFn<
@@ -149,6 +176,10 @@ export interface FormGroupOptions<
   /**
    * Called when group validation fails or validation or submission throws. The
    * callback is awaited before submission finishes.
+   *
+   * Exceptions thrown by this callback are not caught, so `handleSubmit()`
+   * rejects with them. Otherwise, a submission exception still rejects after
+   * this callback finishes.
    *
    * @example
    * ```ts
@@ -208,6 +239,6 @@ export interface FormGroupApi<
   validate: (
     signal: ConfigurableValidationTrigger | 'submit',
   ) => Promise<Array<FormGroupValidateResult<TGroupValue>>>
-  handleSubmit: () => Promise<Array<FormGroupValidateResult<TGroupValue>>>
+  handleSubmit: () => Promise<FormGroupSubmitResult<TGroupValue>>
   reset: () => void
 }

@@ -47,7 +47,7 @@ function Home() {
           event.preventDefault()
           event.stopPropagation()
           const formElement = event.currentTarget
-          const errors = await form.handleSubmit()
+          const { errors } = await form.handleSubmit()
 
           if (errors.length === 0) {
             await handleFormFn({ data: new FormData(formElement) })

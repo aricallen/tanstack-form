@@ -200,6 +200,32 @@ export type FormSubmitFn<
 ) => TSubmitReturn
 
 /**
+ * The submission phase that caused a form submission to fail.
+ *
+ * - `field_validation`: a field validator reported an error or threw.
+ * - `form_validation`: a form validator reported an error or threw.
+ * - `on_submit`: `onSubmit` returned a validation error or threw.
+ */
+export type FormSubmitCause =
+  'field_validation' | 'form_validation' | 'on_submit'
+
+/**
+ * The result of a form submission that did not throw.
+ *
+ * @typeParam TFormData - Library-managed. Do not specify explicitly.
+ */
+export interface FormSubmitResult<in out TFormData> {
+  /**
+   * The error results produced by field and form validation, plus any
+   * validation error returned by `onSubmit`. Empty when the submission
+   * succeeds.
+   */
+  errors: Array<FormValidationError<TFormData>>
+  /** The earliest phase that reported errors, or `null` on success. */
+  cause: FormSubmitCause | null
+}
+
+/**
  * Context passed to `onSubmitInvalid` when a submission fails.
  *
  * @example
@@ -225,6 +251,11 @@ export interface FormSubmitInvalidContext<
   value: TFormData
   /** The form API handling the failed submission. */
   formApi: FormApi<TFormData, TFormErrorTypes>
+  /**
+   * The phase that failed. If a phase threw, this is the phase that threw.
+   * Otherwise, it is the earliest phase that reported errors.
+   */
+  cause: FormSubmitCause
 }
 
 /**
@@ -374,7 +405,8 @@ export interface FormOptions<
    *
    * Return an error created with `createValidationError` or `parseIssues` to
    * mark the submission as invalid. A returned promise is awaited before
-   * submission finishes. If the callback throws, `onSubmitInvalid` is called.
+   * submission finishes. If the callback throws, `onSubmitInvalid` is called
+   * and `handleSubmit()` rejects with the thrown error.
    *
    * @example
    * ```ts
@@ -393,6 +425,10 @@ export interface FormOptions<
    * This includes validation failures, errors returned from `onSubmit`, and
    * exceptions thrown during validation or submission. A returned promise is
    * awaited before submission finishes.
+   *
+   * Exceptions thrown by this callback are not caught, so `handleSubmit()`
+   * rejects with them. Otherwise, a submission exception still rejects after
+   * this callback finishes.
    *
    * @example
    * ```ts
@@ -597,13 +633,12 @@ export interface FormResetOptions {
  * Calls made while an attempt is in progress return the same promise instead
  * of starting another attempt.
  *
- * @returns A promise resolving to the error results produced by field and
- * form validation, plus any validation error returned by `onSubmit` through
- * `createValidationError`. The array is empty if none are produced.
+ * @returns A promise resolving to the submission's `errors` and `cause`. It
+ * rejects if a validator, `onSubmit`, or `onSubmitInvalid` throws.
  * @typeParam TFormData - Library-managed. Do not specify explicitly.
  */
 export type HandleSubmitFn<in out TFormData> = () => Promise<
-  Array<FormValidationError<TFormData>>
+  FormSubmitResult<TFormData>
 >
 
 /**
@@ -691,9 +726,13 @@ export interface FormApi<
    * Calls made while an attempt is in progress return the same promise instead
    * of starting another attempt.
    *
-   * The returned promise resolves to the error results produced by field and
-   * form validation, plus any validation error returned by `onSubmit` through
-   * `createValidationError`. The array is empty if none are produced.
+   * The returned promise resolves to `{ errors, cause }`. `errors` holds the
+   * error results produced by field and form validation, plus any validation
+   * error returned by `onSubmit` through `createValidationError`. `cause` is
+   * the earliest phase that reported errors, or `null` on success.
+   *
+   * The promise rejects if a validator, `onSubmit`, or `onSubmitInvalid`
+   * throws, so handle the rejection when calling this without `await`.
    */
   handleSubmit: HandleSubmitFn<TFormData>
   /**
